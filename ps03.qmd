@@ -1,0 +1,403 @@
+---
+title: "Problem Set #3 STATS 506"
+author: "Jun Su"
+format:
+  html:
+    embed-resources: true
+    code-fold: true
+    html-math-method: mathml
+---
+
+**GitHub Repository:** [sujun-cmd/506hw02](https://github.com/sujun-cmd/506hw02)
+
+### Q1. Random Walk with Momentum
+
+```{r}
+library(haven)
+library(dplyr)
+library(readr)
+library(stringr)
+library(DBI)
+aux <- read_xpt("data/AUX_I.XPT")
+demo <- read_xpt("data/DEMO_I.XPT")
+nhanes <- merge(
+  aux,
+  demo,
+  by = "SEQN",
+  all = FALSE
+)
+
+dim(nhanes)
+```
+
+After reviewing the official NHANES codebook, I found that the numeric missing-value codes are 7 and 9 for DMDCITZN, and 77 and 99 for INDHHIN2; RIAGENDR and DMDHHSZA have no numeric missing-value codes.
+
+```{r}
+nhanes$DMDCITZN[nhanes$DMDCITZN %in% c(7, 9)] <- NA
+nhanes$INDHHIN2[nhanes$INDHHIN2 %in% c(77, 99)] <- NA
+
+```
+
+```{r}
+r1 <- glm(
+  AUXTWIDR ~ factor(RIAGENDR), family = poisson(), data = nhanes
+)
+
+r2 <- glm(AUXTWIDR ~ factor(RIAGENDR) + factor(DMDCITZN) + factor(DMDHHSZA) + factor(INDHHIN2),
+  family = poisson(),
+  data = nhanes
+)
+
+l1 <- glm(AUXTWIDL ~ factor(RIAGENDR), family = poisson(), data = nhanes
+)
+
+l2 <- glm(AUXTWIDL ~ factor(RIAGENDR) + factor(DMDCITZN) + factor(DMDHHSZA) + factor(INDHHIN2),
+  family = poisson(),
+  data = nhanes
+)
+```
+
+```{r}
+
+pseudo_r2 <- function(model) {
+  null_model <- update(model, . ~ 1)
+
+  1 - as.numeric(logLik(model)) /
+    as.numeric(logLik(null_model))
+}#calculate r2 from poisson model
+get_coef_table <- function(model, model_name) {
+  
+  sm <- summary(model)$coefficients
+  
+  data.frame(
+    Model = model_name,
+    Predictor = rownames(sm),
+    IRR = exp(sm[, "Estimate"]),
+    P_value = sm[, "Pr(>|z|)"],
+    row.names = NULL
+  )
+}
+
+coef_table <- rbind(
+  get_coef_table(r1, "1R"),
+  get_coef_table(r2, "2R"),
+  get_coef_table(l1, "1L"),
+  get_coef_table(l2, "2L")
+)
+
+# remove intercept if you do not want to report it
+coef_table <- coef_table[
+  coef_table$Predictor != "(Intercept)",
+]
+
+coef_table$IRR <- round(coef_table$IRR, 3)
+coef_table$P_value <- signif(coef_table$P_value, 3)
+
+knitr::kable(
+  coef_table,
+  caption = "table for coefficients",
+  col.names = c(
+    "Model",
+    "Predictor",
+    "IRR",
+    "p-value"
+  )
+)
+model_table <- data.frame(
+  Model = c("1R", "2R", "1L", "2L"),
+  
+  Outcome = c(
+    "Right ear",
+    "Right ear",
+    "Left ear",
+    "Left ear"
+  ),
+  
+  n = c(
+    nobs(r1),
+    nobs(r2),
+    nobs(l1),
+    nobs(l2)
+  ),
+  
+  Pseudo_R2 = c(
+    pseudo_r2(r1),
+    pseudo_r2(r2),
+    pseudo_r2(l1),
+    pseudo_r2(l2)
+  ),
+  
+  AIC = c(
+    AIC(r1),
+    AIC(r2),
+    AIC(l1),
+    AIC(l2)
+  )
+)
+
+model_table$Pseudo_R2 <- round(model_table$Pseudo_R2, 4)
+model_table$AIC <- round(model_table$AIC, 1)
+
+knitr::kable(
+  model_table,
+  caption = "table for model statistics",
+  col.names = c(
+    "Model",
+    "Outcome",
+    "n",
+    "Pseudo-R2",
+    "AIC"
+  )
+)
+
+```
+
+```{r}
+library(emmeans)
+
+pred_gender <- emmeans(
+  l2,
+  ~ RIAGENDR,
+  type = "response"
+)
+
+pred_gender
+pairs(pred_gender)
+```
+
+The predicted left-ear tympanometric width was 83.6 for males and 85.0 for females. The difference was statistically significant (p = 4.80e-06 \< 0.05), indicating that females have a slightly higher predicted left-ear tympanometric width than males.
+
+## Q2
+
+```{r}
+library(DBI)
+library(RSQLite)
+con <- dbConnect(
+  SQLite(),
+  "data/sakila_master.db"
+) #get the data
+dbListTables(con)
+dbListFields(con, "customer")
+
+```
+
+### Q2A
+
+```{r}
+ 
+customer <- dbGetQuery(con, "SELECT * FROM customer;")
+
+head(customer, 5)
+ 
+
+result_r <- customer %>% group_by(store_id) %>%
+  summarise(n_customer = n(), pct_active = mean(as.numeric(active)) * 100)
+
+result_sql <- dbGetQuery(con,
+  " SELECT store_id, COUNT(customer_id) AS n_customer, AVG(active) * 100 AS pct_active FROM customer GROUP BY store_id; "
+)
+result_r
+result_sql
+
+```
+
+Then get the time benchmark
+
+```{r}
+library(microbenchmark)
+
+microbenchmark(
+  R = {
+        customer <- dbGetQuery(con, "SELECT * FROM customer;")
+
+        result_r <- customer %>% group_by(store_id) %>%
+        summarise(n_customer = n(), pct_active = mean(as.numeric(active)) * 100)
+  },
+
+  SQL = {
+    dbGetQuery(con,
+       " SELECT store_id, COUNT(customer_id) AS n_customer, AVG(active) * 100 AS pct_active FROM customer GROUP BY store_id; "
+      )
+  },
+
+  times = 100
+)
+```
+
+The SQL approach is much faster, with an average runtime of about 805 ms compared with 3116 ms for the R approach. Overall, SQL is nearly four times faster.
+
+### Q2B
+
+```{r}
+staff  <- dbGetQuery(con, "SELECT first_name, last_name, address_id FROM staff;")
+address <- dbGetQuery(con, "SELECT * FROM address;")
+city <- dbGetQuery(con, "SELECT * FROM city;")
+country<- dbGetQuery(con, "SELECT * FROM country;")
+staff_sql <- dbGetQuery(con, "SELECT staff.first_name || ' ' || staff.last_name AS name, country.country FROM staff
+INNER JOIN address
+  ON staff.address_id = address.address_id
+INNER JOIN city
+  ON address.city_id = city.city_id
+INNER JOIN country
+  ON city.country_id = country.country_id;")
+staff_sql
+staff_r <- staff %>% inner_join(address, by = 'address_id') %>% inner_join(city, by = 'city_id') %>% inner_join(country, by = 'country_id') %>% mutate(name = paste(first_name, last_name)) %>% select(name, country)
+staff_r
+```
+
+```{r}
+microbenchmark(
+SQL = { dbGetQuery(con, "SELECT staff.first_name || ' ' || staff.last_name AS name, country.country FROM staff
+INNER JOIN address
+  ON staff.address_id = address.address_id
+INNER JOIN city
+  ON address.city_id = city.city_id
+INNER JOIN country
+  ON city.country_id = country.country_id;")},
+ 
+R = { 
+  staff  <- dbGetQuery(con, "SELECT first_name, last_name, address_id FROM staff;")
+address <- dbGetQuery(con, "SELECT * FROM address;")
+city <- dbGetQuery(con, "SELECT * FROM city;")
+country<- dbGetQuery(con, "SELECT * FROM country;")
+  staff %>% inner_join(address, by = 'address_id') %>% inner_join(city, by = 'city_id') %>% inner_join(country, by = 'country_id') %>% mutate(name = paste(first_name, last_name)) %>% select(name, country)},
+
+  times = 100
+)
+```
+
+The SQL approach is much faster, with an average runtime of about 309 ms compared with 5348 ms for the R approach.
+
+### Q2C
+
+```{r}
+
+box_sql <- dbGetQuery(con, "SELECT DISTINCT film.title, payment.amount FROM film
+INNER JOIN inventory
+  ON film.film_id = inventory.film_id
+INNER JOIN rental
+  ON inventory.inventory_id = rental.inventory_id
+INNER JOIN payment
+  ON rental.rental_id = payment.rental_id WHERE payment.amount = (SELECT MAX(amount) FROM payment);")
+box_sql
+film <- dbGetQuery(con, "SELECT * FROM film;")
+inventory <- dbGetQuery(con, "SELECT * FROM inventory;")
+rental <- dbGetQuery(con, "SELECT * FROM rental;")
+payment <- dbGetQuery(con, "SELECT * FROM payment;")
+box_r <- film %>% inner_join(inventory, by = "film_id") %>% inner_join(rental, by = "inventory_id") %>% 
+  inner_join(payment, by = "rental_id") %>% filter(amount == max(amount)) %>% select(title, amount) %>%
+  distinct()
+box_r
+```
+
+```{r}
+microbenchmark(
+SQL = { dbGetQuery(con, "SELECT DISTINCT film.title, payment.amount FROM film
+INNER JOIN inventory
+  ON film.film_id = inventory.film_id
+INNER JOIN rental
+  ON inventory.inventory_id = rental.inventory_id
+INNER JOIN payment
+  ON rental.rental_id = payment.rental_id WHERE payment.amount = (SELECT MAX(amount) FROM payment);")
+},
+R = {
+film <- dbGetQuery(con, "SELECT * FROM film;")
+inventory <- dbGetQuery(con, "SELECT * FROM inventory;")
+rental <- dbGetQuery(con, "SELECT * FROM rental;")
+payment <- dbGetQuery(con, "SELECT * FROM payment;")
+box_r <- film %>% inner_join(inventory, by = "film_id") %>% inner_join(rental, by = "inventory_id") %>% 
+  inner_join(payment, by = "rental_id") %>% filter(amount == max(amount)) %>% select(title, amount) %>%
+  distinct()
+}
+)
+```
+
+The SQL approach is much faster, with an average runtime of about 1 ms compared with 37 ms for the R approach.
+
+```{r}
+aus <- read_csv("data/au-500.csv")
+
+com_data <- aus %>%
+  filter(endsWith(web, ".com"))
+ 
+perc_com <- nrow(com_data) / nrow(aus) * 100
+perc_com
+```
+
+There are no websites ending in `.com`, so the percentage is **0%**. In fact, all websites in `au-500.csv` end in `.com.au`.
+
+```{r}
+aus$emailDomain <- sub(".*@", "", aus$email)
+count(aus, emailDomain,sort = TRUE)
+```
+
+The most common domain name is hotmail.com, which appears 114 times.
+
+```{r}
+aus$has_NAC <- grepl("[^A-Za-z0-9, ]", aus$company_name)
+percent_NAC <- sum(aus$has_NAC) / nrow(aus)
+percent_NAC
+aus$has_NACnand <- grepl("[^A-Za-z0-9, &]", aus$company_name)
+percent_NACnand <- sum(aus$has_NACnand) / nrow(aus)
+percent_NACnand
+```
+
+8.4% of all company names contain a non-alphabetic character excluding commas and whitespace. 0.2 of all company names contain a non-alphabetic character excluding commas, '&' and whitespace.
+
+```{r}
+
+aus$phone1 <- paste0(
+  substr(gsub("-", "", aus$phone1), 1, 4),
+  "-",
+  substr(gsub("-", "", aus$phone1), 5, 7),
+  "-",
+  substr(gsub("-", "", aus$phone1), 8, 10)
+)
+
+aus$phone2 <- paste0(
+  substr(gsub("-", "", aus$phone2), 1, 4),
+  "-",
+  substr(gsub("-", "", aus$phone2), 5, 7),
+  "-",
+  substr(gsub("-", "", aus$phone2), 8, 10)
+)
+head(aus, 10)
+```
+
+```{r}
+#if not end with numbers, use 0
+aus$apt_num <- as.numeric(
+  ifelse(
+    is.na(str_extract(aus$address, "\\d+$")),
+    "0",
+    str_extract(aus$address, "\\d+$")
+  )
+)
+hist(log(aus$apt_num), main = 'A histogram of the log of the apartment numbers for all addresses', xlab = 'log of the apartment numbers')
+```
+
+```{r}
+apt <- aus$apt_num[aus$apt_num > 0]
+first_digit <- as.numeric(substr(as.character(apt), 1, 1))
+observed_prob <- table(first_digit) / sum(table(first_digit))
+observed_prob
+
+digits <- 1:9
+benford_prob <- log10(1 + 1 / digits)
+benford_prob
+```
+
+They don't appear to follow the Benford's law.
+
+```{r}
+chisq.test(
+  observed_prob,
+  p = benford_prob
+)
+```
+
+Runnning a chi-square test, the p value is far larger than 0.05, so we reject the null hypothesis that the apartment number follows the Benford's law. The apartment numbers would not pass as real data.
+
+## Attribution of Sources
+
+OpenAI ChatGPT was used to review my draft against the assignment requirements and to explain the help documents. I wrote, reviewed, and verified the final code myself.
