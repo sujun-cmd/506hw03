@@ -2735,9 +2735,9 @@ potential integer overflows</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Unit: microseconds
- expr      min        lq      mean   median        uq      max neval
-    R 1659.680 1708.4085 1835.7479 1749.101 1796.9685 5395.641   100
-  SQL  177.407  191.3675  212.3529  209.920  219.9445  479.864   100</code></pre>
+ expr      min       lq      mean    median       uq      max neval
+    R 1654.514 1702.238 1827.6578 1717.3875 1763.943 5387.933   100
+  SQL  169.330  186.181  201.2112  203.2985  208.854  306.844   100</code></pre>
 </div>
 </div>
 <p>The SQL approach is much faster, with an average runtime of about 805 ms compared with 3116 ms for the R approach. Overall, SQL is nearly four times faster.</p>
@@ -2800,12 +2800,12 @@ potential integer overflows</code></pre>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>Unit: microseconds
- expr      min        lq      mean   median        uq      max neval
-  SQL  111.438  126.4645  142.7841  146.616  157.1735  201.843   100
-    R 3169.054 3328.7900 3575.5014 3412.184 3571.4075 5840.573   100</code></pre>
+ expr      min        lq      mean   median       uq      max neval
+  SQL  108.076  122.5695  138.1782  142.639  148.625  320.989   100
+    R 3149.128 3235.8020 3397.4281 3277.560 3307.716 5049.027   100</code></pre>
 </div>
 </div>
-<p>The SQL approach is much faster, with an average runtime of about 309 ms compared with 5348 ms for the R approach.</p>
+<p>The SQL approach is much faster, with an average runtime of about 200 ms compared with 4000 ms for the R approach.</p>
 </section>
 <section id="q2c" class="level3">
 <h3 class="anchored" data-anchor-id="q2c">Q2C</h3>
@@ -2882,9 +2882,9 @@ potential integer overflows</code></pre>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>Unit: milliseconds
- expr       min        lq      mean    median        uq       max neval
-  SQL  1.063991  1.097837  1.244377  1.185412  1.342976  2.701162   100
-    R 34.878167 35.497451 37.371516 36.295475 38.046196 77.659453   100</code></pre>
+ expr       min        lq      mean   median        uq       max neval
+  SQL  1.060137  1.088099  1.202125  1.16071  1.279979  2.262503   100
+    R 34.544755 35.168755 36.507762 35.48062 37.091532 75.117863   100</code></pre>
 </div>
 </div>
 <p>The SQL approach is much faster, with an average runtime of about 1 ms compared with 37 ms for the R approach.</p>

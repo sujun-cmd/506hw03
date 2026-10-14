@@ -317,7 +317,7 @@ country<- dbGetQuery(con, "SELECT * FROM country;")
 )
 ```
 
-The SQL approach is much faster, with an average runtime of about 309 ms compared with 5348 ms for the R approach.
+The SQL approach is much faster, with an average runtime of about 200 ms compared with 4000 ms for the R approach.
 
 ### Q2C
 
