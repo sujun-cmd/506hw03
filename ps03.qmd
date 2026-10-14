@@ -62,18 +62,25 @@ nhanes$income[nhanes$income == 15] <- 12
 
 ```{r}
 r1 <- glm(
-  AUXTWIDR ~ factor(RIAGENDR), family = poisson(), data = nhanes
-)
-
-r2 <- glm(AUXTWIDR ~ factor(RIAGENDR) + factor(DMDCITZN) + factor(DMDHHSZA) + factor(INDHHIN2),
+  AUXTWIDR ~ gender,
   family = poisson(),
   data = nhanes
 )
 
-l1 <- glm(AUXTWIDL ~ factor(RIAGENDR), family = poisson(), data = nhanes
+r2 <- glm(
+  AUXTWIDR ~ gender + citizenship + num_children + income,
+  family = poisson(),
+  data = nhanes
 )
 
-l2 <- glm(AUXTWIDL ~ factor(RIAGENDR) + factor(DMDCITZN) + factor(DMDHHSZA) + factor(INDHHIN2),
+l1 <- glm(
+  AUXTWIDL ~ gender,
+  family = poisson(),
+  data = nhanes
+)
+
+l2 <- glm(
+  AUXTWIDL ~ gender + citizenship + num_children + income,
   family = poisson(),
   data = nhanes
 )
@@ -87,13 +94,18 @@ l2 <- glm(AUXTWIDL ~ factor(RIAGENDR) + factor(DMDCITZN) + factor(DMDHHSZA) + fa
 #'
 #'
 pseudo_r2 <- function(model) {
-  null_model <- update(model, . ~ 1)
+  null_model <- update(model, . ~ 1, data = model.frame(model))
 
   1 - as.numeric(logLik(model)) /
     as.numeric(logLik(null_model))
 }#calculate r2 from poisson model
 
-
+#' Extract incidence rate ratios and Wald test p-values
+#'
+#' @param model A fitted Poisson glm object.
+#' @param model_name A character string identifying the model.
+#' @return A data frame containing the name of the model and predictor,
+#'   incidence rate ratios, and 2-side Wald test p-values.
 get_coef_table <- function(model, model_name) {
   
   sm <- summary(model)$coefficients
@@ -180,13 +192,23 @@ knitr::kable(
 )
 
 ```
+```{r}
+gender_coef <- summary(l2)$coefficients["genderFemale", ]
 
+gender_irr <- exp(gender_coef["Estimate"])
+gender_p <- gender_coef["Pr(>|z|)"]
+
+gender_irr
+gender_p
+```
+IRR = 1.018746，p = 2.47e-07< 0.05 Therefore, the null hypothesis is rejected. The expected measurement for the left ear in women is approximately 1.87% higher than in men.
 ```{r}
 library(emmeans)
 
+
 pred_gender <- emmeans(
   l2,
-  ~ RIAGENDR,
+  ~ gender,
   type = "response"
 )
 
@@ -194,7 +216,7 @@ pred_gender
 pairs(pred_gender)
 ```
 
-The predicted left-ear tympanometric width was 83.6 for males and 85.0 for females. The difference was statistically significant (p = 4.80e-06 \< 0.05), indicating that females have a slightly higher predicted left-ear tympanometric width than males.
+The predicted left-ear tympanometric width was 84.8 for males and 86.3 for females. The difference was statistically significant (p < 0.0001), indicating that females have a slightly higher predicted left-ear tympanometric width than males.
 
 ## Q2
 
